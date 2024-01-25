@@ -1,12 +1,40 @@
+use std::ops::Add;
+
 use axum::{
-    routing::{get, post},
     http::StatusCode,
+    routing::{get, post},
     Json, Router,
 };
 use serde_derive::{Deserialize, Serialize};
 
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    cmd: Commands,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum Commands {
+    Server {
+        // 使用#[arg(...)]可以把Arguments改为Options
+        #[arg(short, long)]
+        port: Option<String>,
+    },
+}
+
 #[tokio::main]
 async fn main() {
+    let cli = Cli::parse();
+
+    match cli.cmd {
+        Commands::Server { port } => serve(&port.unwrap_or("9009".to_owned())).await,
+    };
+}
+
+async fn serve(port: &str) {
     // initialize tracing
     tracing_subscriber::fmt::init();
 
@@ -18,7 +46,9 @@ async fn main() {
         .route("/users", post(create_user));
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9009").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:".to_owned().add(port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 

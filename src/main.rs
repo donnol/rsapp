@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use log::info;
 use serde_derive::{Deserialize, Serialize};
 
 use clap::{Parser, Subcommand};
@@ -44,6 +45,8 @@ async fn serve(port: &str) {
         .route("/", get(root))
         // `POST /users` goes to `create_user`
         .route("/users", post(create_user));
+
+    info!("port: {}", port);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:".to_owned().add(port))

@@ -580,6 +580,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "log",
  "serde",
  "serde_derive",
  "tokio",

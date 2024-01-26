@@ -1,14 +1,38 @@
-use std::ops::Add;
+use std::{fmt::Display, ops::Add};
 
 use axum::{
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
+use clap::{Parser, Subcommand};
+use config::Config;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
+use sqlx::postgres::PgPoolOptions;
 
-use clap::{Parser, Subcommand};
+#[derive(Deserialize, Debug, Clone)]
+struct Conf {
+    name: String,
+    postgres: Pg,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Pg {
+    dsn: String,
+}
+
+impl Display for Conf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "name: {}, postgres: {}", self.name, self.postgres)
+    }
+}
+
+impl Display for Pg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dsn: *")
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -38,6 +62,31 @@ async fn main() {
 async fn serve(port: &str) {
     // initialize tracing
     tracing_subscriber::fmt::init();
+
+    let settings = Config::builder()
+        // Add in `./Settings.toml`
+        .add_source(config::File::with_name("config.toml"))
+        .build()
+        .unwrap();
+
+    // Print out our settings (as a HashMap)
+    let conf = settings.try_deserialize::<Conf>().unwrap();
+    println!("{}, {}", conf, conf.name);
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&conf.postgres.dsn)
+        .await
+        .unwrap();
+
+    // Make a simple query to return the given parameter (use a question mark `?` instead of `$1` for MySQL/MariaDB)
+    let row: (i64,) = sqlx::query_as("SELECT $1")
+        .bind(150_i64)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(row.0, 150);
 
     // build our application with a route
     let app = Router::new()

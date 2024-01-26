@@ -1,0 +1,4 @@
+name = 'rsapp'
+
+[postgres]
+dsn = "postgres://jd:jd@localhost/mydb" # replace user, password and db before start

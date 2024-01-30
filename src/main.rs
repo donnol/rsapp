@@ -1,6 +1,7 @@
 use std::{fmt::Display, ops::Add};
 
 use axum::{
+    extract::State,
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -9,7 +10,7 @@ use clap::{Parser, Subcommand};
 use config::Config;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{postgres::PgPoolOptions, PgPool, Postgres};
 
 #[derive(Deserialize, Debug, Clone)]
 struct Conf {
@@ -93,7 +94,8 @@ async fn serve(port: &str) {
         // `GET /` goes to `root`
         .route("/", get(root))
         // `POST /users` goes to `create_user`
-        .route("/users", post(create_user));
+        .route("/users", post(create_user))
+        .with_state(pool);
 
     info!("port: {}", port);
 
@@ -110,6 +112,7 @@ async fn root() -> &'static str {
 }
 
 async fn create_user(
+    State(pool): State<PgPool>,
     // this argument tells axum to parse the request body
     // as JSON into a `CreateUser` type
     Json(payload): Json<CreateUser>,
@@ -119,6 +122,12 @@ async fn create_user(
         id: 1337,
         username: payload.username,
     };
+
+    let name = sqlx::query_scalar::<Postgres, String>("select 'hello world from pg'")
+        .fetch_one(&pool)
+        .await
+        .map_err(internal_error);
+    info!("{:?}", name);
 
     // this will be converted into a JSON response
     // with a status code of `201 Created`
@@ -136,4 +145,13 @@ struct CreateUser {
 struct User {
     id: u64,
     username: String,
+}
+
+/// Utility function for mapping any error into a `500 Internal Server Error`
+/// response.
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }

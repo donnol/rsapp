@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 use config::Config;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, PgPool, Postgres};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 
 #[derive(Deserialize, Debug, Clone)]
 struct Conf {
@@ -118,16 +118,19 @@ async fn create_user(
     Json(payload): Json<CreateUser>,
 ) -> (StatusCode, Json<User>) {
     // insert your application logic here
-    let user = User {
+    let mut user = User {
         id: 1337,
         username: payload.username,
     };
 
-    let name = sqlx::query_scalar::<Postgres, String>("select 'hello world from pg'")
-        .fetch_one(&pool)
+    let mut tx = pool.begin().await.unwrap();
+    let name = sqlx::query_scalar::<_, String>("select 'hello world from pg'")
+        .fetch_one(&mut *tx)
         .await
         .map_err(internal_error);
+    tx.commit().await.unwrap();
     info!("{:?}", name);
+    user.username = name.unwrap();
 
     // this will be converted into a JSON response
     // with a status code of `201 Created`

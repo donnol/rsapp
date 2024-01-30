@@ -111,6 +111,28 @@ async fn root() -> &'static str {
     "Hello, World!"
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        let client = reqwest::Client::new();
+        let res = client
+            .post("http://localhost:9009/users")
+            .header("Content-Type", "application/json")
+            .body("{\"username\": \"jd\"}")
+            .send();
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let r = rt.block_on(res);
+        let data = rt.block_on(r.unwrap().bytes());
+        // println!("{:?}", data.ok());
+        assert_eq!(
+            data.ok().unwrap(),
+            "{\"id\":1337,\"username\":\"hello world from pg\"}"
+        );
+    }
+}
+
 async fn create_user(
     State(pool): State<PgPool>,
     // this argument tells axum to parse the request body

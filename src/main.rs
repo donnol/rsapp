@@ -1,3 +1,6 @@
+#![feature(test)]
+extern crate test;
+
 use std::{fmt::Display, ops::Add};
 
 use axum::{
@@ -128,6 +131,11 @@ mod tests {
             data.ok().unwrap(),
             "{\"id\":1337,\"username\":\"hello world from pg\"}"
         );
+    }
+
+    #[bench]
+    fn bench_create_user(b: &mut test::Bencher) {
+        b.iter(|| it_works());
     }
 }
 

@@ -45,7 +45,6 @@ struct Cli {
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
     Server {
-        // 使用#[arg(...)]可以把Arguments改为Options
         #[arg(short, long)]
         port: Option<String>,
     },
@@ -65,7 +64,6 @@ async fn serve(port: &str) {
     tracing_subscriber::fmt::init();
 
     let settings = Config::builder()
-        // Add in `./Settings.toml`
         .add_source(config::File::with_name("config.toml"))
         .build()
         .unwrap();
@@ -125,7 +123,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let r = rt.block_on(res);
         let data = rt.block_on(r.unwrap().bytes());
-        // println!("{:?}", data.ok());
+
         assert_eq!(
             data.ok().unwrap(),
             "{\"id\":1337,\"username\":\"hello world from pg\"}"

@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate test;
 
-use std::{fmt::Display, ops::Add};
+use std::{fmt::Display, ops::Add, time::Duration};
 
 use axum::{
     extract::State,
@@ -14,6 +14,7 @@ use config::Config;
 use log::info;
 use serde_derive::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
+use tokio::{signal, time::sleep};
 
 #[derive(Deserialize, Debug, Clone)]
 struct Conf {
@@ -94,6 +95,7 @@ async fn serve(port: &str) {
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(root))
+        .route("/longtime", get(long_time_request))
         // `POST /users` goes to `create_user`
         .route("/users", post(create_user))
         .with_state(pool);
@@ -104,12 +106,46 @@ async fn serve(port: &str) {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:".to_owned().add(port))
         .await
         .unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 // basic handler that responds with a static string
 async fn root() -> &'static str {
     "Hello, World!"
+}
+
+// for graceful shutdown. When running this request, ctrl+c will wait this request finish.
+async fn long_time_request() -> &'static str {
+    sleep(Duration::from_secs(10)).await;
+
+    "Long time request."
 }
 
 #[cfg(test)]

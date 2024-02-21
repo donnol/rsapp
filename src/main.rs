@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate test;
 
-use std::{fmt::Display, ops::Add, time::Duration};
+use std::{fmt::Display, fmt::Formatter, fmt::Result, ops::Add, time::Duration};
 
 use axum::{
     extract::State,
@@ -28,13 +28,13 @@ struct Pg {
 }
 
 impl Display for Conf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "name: {}, postgres: {}", self.name, self.postgres)
     }
 }
 
 impl Display for Pg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "dsn: *")
     }
 }

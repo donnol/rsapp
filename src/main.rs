@@ -196,6 +196,21 @@ async fn create_user(
     info!("{:?}", name);
     user.username = name.unwrap();
 
+    let users = vec![
+        User {
+            id: 1,
+            username: "ja".to_string(),
+        },
+        User {
+            id: 2,
+            username: "jb".to_string(),
+        },
+    ];
+    println!(
+        "ids: {:?}",
+        users.iter().map(|item| item.id).collect::<Vec<_>>()
+    );
+
     // this will be converted into a JSON response
     // with a status code of `201 Created`
     (StatusCode::CREATED, Json(user))

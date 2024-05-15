@@ -98,6 +98,7 @@ async fn serve(port: &str) {
         .route("/longtime", get(long_time_request))
         // `POST /users` goes to `create_user`
         .route("/users", post(create_user))
+        .route("/video/metadata", get(video_metadata))
         .with_state(pool);
 
     info!("port: {}", port);
@@ -148,6 +149,104 @@ async fn long_time_request() -> &'static str {
     "Long time request."
 }
 
+use ffmpeg_next as ffmpeg;
+
+#[derive(Deserialize)]
+struct VideoMeta {
+    file: String,
+}
+
+async fn video_metadata(Json(payload): Json<VideoMeta>) -> (StatusCode, &'static str) {
+    ffmpeg::init().unwrap();
+
+    println!("{}", payload.file);
+    match ffmpeg::format::input(&payload.file) {
+        Ok(context) => {
+            for (k, v) in context.metadata().iter() {
+                println!("{}: {}", k, v);
+            }
+
+            if let Some(stream) = context.streams().best(ffmpeg::media::Type::Video) {
+                println!("Best video stream index: {}", stream.index());
+            }
+
+            if let Some(stream) = context.streams().best(ffmpeg::media::Type::Audio) {
+                println!("Best audio stream index: {}", stream.index());
+            }
+
+            if let Some(stream) = context.streams().best(ffmpeg::media::Type::Subtitle) {
+                println!("Best subtitle stream index: {}", stream.index());
+            }
+
+            println!(
+                "duration (seconds): {:.2}",
+                context.duration() as f64 / f64::from(ffmpeg::ffi::AV_TIME_BASE)
+            );
+
+            for stream in context.streams() {
+                println!("stream index {}:", stream.index());
+                println!("\ttime_base: {}", stream.time_base());
+                println!("\tstart_time: {}", stream.start_time());
+                println!("\tduration (stream timebase): {}", stream.duration());
+                println!(
+                    "\tduration (seconds): {:.2}",
+                    stream.duration() as f64 * f64::from(stream.time_base())
+                );
+                println!("\tframes: {}", stream.frames());
+                println!("\tdisposition: {:?}", stream.disposition());
+                println!("\tdiscard: {:?}", stream.discard());
+                println!("\trate: {}", stream.rate());
+
+                let codec =
+                    ffmpeg::codec::context::Context::from_parameters(stream.parameters()).unwrap();
+                println!("\tmedium: {:?}", codec.medium());
+                println!("\tid: {:?}", codec.id());
+
+                if codec.medium() == ffmpeg::media::Type::Video {
+                    if let Ok(video) = codec.decoder().video() {
+                        println!("\tbit_rate: {}", video.bit_rate());
+                        println!("\tmax_rate: {}", video.max_bit_rate());
+                        println!("\tdelay: {}", video.delay());
+                        println!("\tvideo.width: {}", video.width());
+                        println!("\tvideo.height: {}", video.height());
+                        println!("\tvideo.format: {:?}", video.format());
+                        println!("\tvideo.has_b_frames: {}", video.has_b_frames());
+                        println!("\tvideo.aspect_ratio: {}", video.aspect_ratio());
+                        println!("\tvideo.color_space: {:?}", video.color_space());
+                        println!("\tvideo.color_range: {:?}", video.color_range());
+                        println!("\tvideo.color_primaries: {:?}", video.color_primaries());
+                        println!(
+                            "\tvideo.color_transfer_characteristic: {:?}",
+                            video.color_transfer_characteristic()
+                        );
+                        println!("\tvideo.chroma_location: {:?}", video.chroma_location());
+                        println!("\tvideo.references: {}", video.references());
+                        println!("\tvideo.intra_dc_precision: {}", video.intra_dc_precision());
+                    }
+                } else if codec.medium() == ffmpeg::media::Type::Audio {
+                    if let Ok(audio) = codec.decoder().audio() {
+                        println!("\tbit_rate: {}", audio.bit_rate());
+                        println!("\tmax_rate: {}", audio.max_bit_rate());
+                        println!("\tdelay: {}", audio.delay());
+                        println!("\taudio.rate: {}", audio.rate());
+                        println!("\taudio.channels: {}", audio.channels());
+                        println!("\taudio.format: {:?}", audio.format());
+                        println!("\taudio.frames: {}", audio.frames());
+                        println!("\taudio.align: {}", audio.align());
+                        println!("\taudio.channel_layout: {:?}", audio.channel_layout());
+                    }
+                }
+            }
+            (StatusCode::OK, ("ok"))
+        }
+
+        Err(error) => {
+            println!("error: {}", error);
+            (StatusCode::BAD_REQUEST, ("failed"))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -172,6 +271,26 @@ mod tests {
     #[bench]
     fn bench_create_user(b: &mut test::Bencher) {
         b.iter(|| it_works());
+    }
+
+    #[test]
+    fn video_metadata() {
+        let client = reqwest::Client::new();
+        let res = client
+            .get("http://localhost:9009/video/metadata")
+            .header("Content-Type", "application/json")
+            .body("{\"file\": \"/home/jd/new.mp4\"}")
+            .send();
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let r = rt.block_on(res);
+        let data = rt.block_on(r.unwrap().bytes());
+        println!("{:?}", data);
+
+        // assert_eq!(
+        //     data.ok().unwrap(),
+        //     "{\"id\":1337,\"username\":\"hello world from pg\"}"
+        // );
     }
 }
 
